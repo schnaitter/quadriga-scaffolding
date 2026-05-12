@@ -1,0 +1,61 @@
+QUADRIGA scripts handling assessment (configuration) and metadata transformations
+=================================================================================
++ quadriga/
++ quadriga/__init__.py
+
+QUADRIGA color definitions for JupyterQuiz
++ quadriga/colors.py
+
+Script to support the Drag and Drop Quiz
++ quadriga/assessment.py
+
+
+Metadata scripts are in this package
++ quadriga/metadata/
++ quadriga/metadata/__init__.py
+
+Entry point of most commonly used metadata scripts. Run to update all generated metadata files.
++ quadriga/metadata/run_all.py
+
+Utility function used across the other scripts
++ quadriga/metadata/utils.py
+
+Download the JSON-Schema definition and validate the metadata.yml against it.
++ quadriga/metadata/validate_schema.py
+
+Extract information from _config.yml and lernziele.md and update metadata.yml accordingly.
++ quadriga/metadata/extract_from_book_config.py
++ quadriga/metadata/extract_from_lernziele.py
+
+Create metadata files for GitHub, writing software, and Zenodo
++ quadriga/metadata/update_citation_cff.py
++ quadriga/metadata/create_bibtex.py
++ quadriga/metadata/create_zenodo_json.py
+
+Create tertiary versions of the metadata and inject it into the built book before deployment (via the GitHub Action)
++ quadriga/metadata/create_jsonld.py
++ quadriga/metadata/create_rdfxml.py
++ quadriga/metadata/inject_all_metadata.py
+
+Make sure the version in the metadata is correct in case of a release
++ quadriga/metadata/update_version_from_tag.py
+
+
+
+Common CSS and JS files for consistent design, assessment, and interactivity
+============================================================================
++ _static/
+
+Definition of QUADRIGA colors, common admonitions, and more
++ _static/quadriga.css
+
+Drag and Drop Quiz - works in conjunction with `assessment.py`
++ _static/drag_drop.css
++ _static/assessment.js
+
+Carousel implementation
++ _static/carousel.css
++ _static/carousel.js
+
+Customizations of the design of large (result) tables
++ _static/custom-table.css
