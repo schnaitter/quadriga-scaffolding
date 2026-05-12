@@ -1,0 +1,6 @@
+line-length = 120
+target-version = "py314"
+exclude = ["tests/", "docs/", ".git/"]
+
+select = ["E", "F", "W", "C90", "B", "I", "N", "UP", "ANN", "PL", "RET", "RUF"]
+ignore = []
