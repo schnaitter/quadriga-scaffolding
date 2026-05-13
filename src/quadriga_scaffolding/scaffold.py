@@ -71,16 +71,16 @@ def parse_scaffold(f: Iterable[str]) -> Scaffold:
                 entry = parse_path(line[2:])
                 if ".." in entry.path.parts:
                     raise ValueError("Navigating to parent directories in file paths is not allowed")
-                logging.info(f"{ln}: Create '{entry}'")
+                logging.debug(f"{ln}: Create '{entry}'")
                 scaffold.create.append(entry)
             case "-":
                 entry = parse_path(line[2:])
                 if ".." in entry.path.parts:
                     raise ValueError("Navigating to parent directories in file paths is not allowed")
-                logging.info(f"{ln}: Delete '{entry}'")
+                logging.debug(f"{ln}: Delete '{entry}'")
                 scaffold.delete.append(entry)
             case _:
-                logging.info(f"{ln}: Comment")
+                logging.debug(f"{ln}: Comment")
 
     return scaffold
 

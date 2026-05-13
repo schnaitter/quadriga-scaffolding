@@ -23,10 +23,21 @@ def main() -> None:
         action="store_true",
         help="Show INFO level logging messages",
     )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        help="Show DEBUG level logging messages (implies --verbose)",
+    )
 
     args = parser.parse_args()
 
-    log_level = logging.INFO if args.verbose else logging.WARNING
+    if args.debug:
+        log_level = logging.DEBUG
+    elif args.verbose:
+        log_level = logging.INFO
+    else:
+        log_level = logging.WARNING
     logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
     scaffold = load_scaffold()
