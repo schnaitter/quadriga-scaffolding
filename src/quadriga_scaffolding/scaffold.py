@@ -33,18 +33,6 @@ def package_data_root() -> Traversable:
     return files("quadriga_scaffolding") / "data"
 
 
-def full_oer_path(oer_path: Path, relative_path: Path) -> Path:
-    return oer_path / relative_path
-
-
-def full_canon_path(relative_path: Path) -> Traversable:
-    """Resolve ``relative_path`` against the packaged ``data/`` directory."""
-    resource: Traversable = package_data_root()
-    for part in relative_path.parts:
-        resource = resource / part
-    return resource
-
-
 def parse_path(pathstring: str) -> ScaffoldEntry:
     pathstring = pathstring.strip()
     if len(pathstring) == 0:
@@ -120,7 +108,7 @@ def validate_scaffold(scaffold: Scaffold) -> bool:
         logging.warning(f"{overlap} appears in both create and delete")
 
     for kind, file in scaffold.create:
-        resource = full_canon_path(file)
+        resource = package_data_root().joinpath(*file.parts)
         if not resource.is_dir() and not resource.is_file():
             result = False
             logging.warning(f"{file} does not exist in packaged data/")
