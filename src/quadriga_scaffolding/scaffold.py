@@ -36,7 +36,10 @@ def parse_path(pathstring: str) -> ScaffoldEntry:
     parsetype = "file"
     if pathstring[-1] == "/":
         parsetype = "dir"
-    return (parsetype, Path(pathstring))
+    path = Path(pathstring)
+    if path.is_absolute():
+        raise ValueError(f"Absolute paths are not allowed: {pathstring}")
+    return (parsetype, path)
 
 
 def load_scaffold(filename: str | Path | None = None) -> Scaffold:
@@ -59,16 +62,18 @@ def parse_scaffold(f: Iterable[str]) -> Scaffold:
     for ln, line in enumerate(f):
         if not line.strip():
             continue
-        if ".." in line:
-            raise ValueError("Navigating to parent directories in file paths is not allowed")
 
         match line[0]:
             case "+":
                 path = parse_path(line[2:].strip())
+                if ".." in path[1].parts:
+                    raise ValueError("Navigating to parent directories in file paths is not allowed")
                 logging.info(f"{ln}: Create '{path}'")
                 scaffold["create"].append(path)
             case "-":
                 path = parse_path(line[2:].strip())
+                if ".." in path[1].parts:
+                    raise ValueError("Navigating to parent directories in file paths is not allowed")
                 logging.info(f"{ln}: Delete '{path}'")
                 scaffold["delete"].append(path)
             case _:
