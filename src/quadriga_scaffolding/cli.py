@@ -10,6 +10,7 @@ from quadriga_scaffolding.scaffold import load_scaffold, validate_scaffold
 
 
 def main() -> None:
+    """Run the ``scaffold`` console script."""
     parser = ArgumentParser(description="Update a QUADRIGA OER to contain common files to the latest version.")
     parser.add_argument("oer_path", help="Path to the OER to compare or update")
     parser.add_argument(

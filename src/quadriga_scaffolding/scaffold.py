@@ -13,17 +13,23 @@ from typing import NamedTuple
 
 
 class EntryKind(StrEnum):
+    """Kind of scaffold entry: a regular file or a directory."""
+
     FILE = "file"
     DIR = "dir"
 
 
 class ScaffoldEntry(NamedTuple):
+    """A single manifest entry: an ``EntryKind`` paired with its relative ``Path``."""
+
     kind: EntryKind
     path: Path
 
 
 @dataclass(frozen=True)
 class Scaffold:
+    """Parsed scaffold manifest, split into ``create`` and ``delete`` entries."""
+
     create: list[ScaffoldEntry] = field(default_factory=list)
     delete: list[ScaffoldEntry] = field(default_factory=list)
 
@@ -34,6 +40,11 @@ def package_data_root() -> Traversable:
 
 
 def parse_path(pathstring: str) -> ScaffoldEntry:
+    """Parse a manifest path into a ``ScaffoldEntry``.
+
+    A trailing ``/`` marks the entry as a directory; otherwise it is a file.
+    Absolute paths are rejected.
+    """
     pathstring = pathstring.strip()
     if len(pathstring) == 0:
         raise ValueError("Empty path string")
@@ -60,6 +71,12 @@ def load_scaffold(filename: str | Path | None = None) -> Scaffold:
 
 
 def parse_scaffold(f: Iterable[str]) -> Scaffold:
+    """Parse manifest lines into a ``Scaffold``.
+
+    Lines starting with ``+ `` add a create entry; lines starting with ``- ``
+    add a delete entry; anything else (including blank lines) is treated as a
+    comment. ``..`` segments in entry paths are rejected.
+    """
     scaffold = Scaffold()
 
     for ln, line in enumerate(f, start=1):
