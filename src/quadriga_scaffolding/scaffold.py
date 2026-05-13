@@ -30,6 +30,7 @@ def full_canon_path(relative_path: Path) -> Traversable:
 
 
 def parse_path(pathstring: str) -> ScaffoldEntry:
+    pathstring = pathstring.strip()
     if len(pathstring) == 0:
         raise ValueError("Empty path string")
 
@@ -65,13 +66,13 @@ def parse_scaffold(f: Iterable[str]) -> Scaffold:
 
         match line[0]:
             case "+":
-                path = parse_path(line[2:].strip())
+                path = parse_path(line[2:])
                 if ".." in path[1].parts:
                     raise ValueError("Navigating to parent directories in file paths is not allowed")
                 logging.info(f"{ln}: Create '{path}'")
                 scaffold["create"].append(path)
             case "-":
-                path = parse_path(line[2:].strip())
+                path = parse_path(line[2:])
                 if ".." in path[1].parts:
                     raise ValueError("Navigating to parent directories in file paths is not allowed")
                 logging.info(f"{ln}: Delete '{path}'")
