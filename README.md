@@ -1,29 +1,69 @@
 # QUADRIGA scaffolding
 
-This script updates a QUADRIGA OER to contain common files (scripts, CSS, JS, ...) to the latest version.
+This tool updates a QUADRIGA OER to contain common files (scripts, CSS, JS, ...) to the latest version.
+
+## Installation (for development)
+
+The project is a standard `pyproject.toml`-based package managed with [`uv`](https://docs.astral.sh/uv/).
+
+Clone the repository and create the development environment in one step:
+
+```console
+$ git clone https://github.com/quadriga-dk/quadriga-scaffolding.git
+$ cd quadriga-scaffolding
+$ uv sync
+```
+
+`uv sync` will create a `.venv/`, install the package in **editable** mode, and pull in the development tools listed under `[dependency-groups].dev` (currently `pytest`, `ruff`, `mypy`).
+
+If you prefer plain `pip` over `uv`:
+
+```console
+$ python3 -m venv .venv
+$ source .venv/bin/activate
+$ pip install -e ".[dev]"  # or: pip install -e . && pip install pytest ruff mypy
+```
+
+### Running the development tools
+
+```console
+$ uv run pytest          # tests
+$ uv run ruff check .    # lint
+$ uv run mypy            # type-check
+```
 
 ## Usage
 
-To compare the current state of an OER to the newest version of the common files, make sure your clone of the `quadriga-dk/quadriga-scaffolding` repository is up to date. Then, from within the `quadriga-scaffolding` directory, run
+The package installs a `scaffold` console script. The common files and the manifest ship with the package via `importlib.resources`, so the tool no longer depends on being run from inside the repository clone.
+
+To compare the current state of an OER to the newest version of the common files:
 
 ```console
-$ ./scaffold.py ../path/to/oer/
+$ uv run scaffold ../path/to/oer/
 ```
 
-to get an overview of changed files. To update the files to the newest version run
+To update the files to the newest version:
 
 ```console
-$ ./scaffold.py --update ../path/to/oer/
+$ uv run scaffold --update ../path/to/oer/
 ```
 
-and the script will overwrite existing files with their newest version and possibly delete files that were marked as deleted in the scaffolding repo.
+The script will overwrite existing files with their newest version and possibly delete files that were marked as deleted in the scaffolding manifest.
 
-## Structure of the Repo
+Equivalent invocations:
 
-In the `data/` folder you can find a copy of the files and folders that are common amongst all OER and which will be used to create or overwrite files in the OER.
+```console
+$ uv run python -m quadriga_scaffolding ../path/to/oer/
+$ scaffold ../path/to/oer/        # if the venv is activated
+```
 
-The file `scaffold.txt` contains the files and directories to be created or overwritten (lines starting with a `+ `) and deleted (lines starting with `- `). Every other line is a comment and thus ignored by the script.
+## Structure of the repo
 
-The file `scaffold.py` is a Python script to handle the scaffolding and updating the scaffolding. The script is set up to use `uv` to run the script. You can also manually create a virtual environment, install the requirements listed at the top of the file and then run it with `python3 scaffold.py` if you don't have `uv` available.
+The package lives under `src/quadriga_scaffolding/`:
 
+- `scaffold.py` — core logic (parsing the manifest, resolving packaged resources, checking the data tree).
+- `cli.py` — command-line entry point (`scaffold` console script).
+- `data/` — the files and folders that are common amongst all OERs and that will be used to create or overwrite files in the target OER. **These ship with the installed package.**
+- `data/scaffold.txt` — manifest listing files/directories to be created or overwritten (lines starting with `+ `) and deleted (lines starting with `- `). Every other line is treated as a comment.
 
+Tests live under `tests/`.
