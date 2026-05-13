@@ -60,7 +60,7 @@ def load_scaffold(filename: str | Path | None = None) -> Scaffold:
 def parse_scaffold(f: Iterable[str]) -> Scaffold:
     scaffold: Scaffold = {"create": [], "delete": []}
 
-    for ln, line in enumerate(f):
+    for ln, line in enumerate(f, start=1):
         if not line.strip():
             continue
 
