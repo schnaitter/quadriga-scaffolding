@@ -34,6 +34,11 @@ $ uv run mypy            # type-check
 
 ## Usage
 
+> **⚠️ Work in progress.** The CLI currently only validates that the packaged
+> `data/` tree matches the manifest. The `oer_path` argument and `--update`
+> flag are accepted but the diff/update behaviour described below is not yet
+> implemented.
+
 The package installs a `scaffold` console script. The common files and the manifest ship with the package via `importlib.resources`, so the tool no longer depends on being run from inside the repository clone.
 
 To compare the current state of an OER to the newest version of the common files:
