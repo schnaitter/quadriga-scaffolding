@@ -6,7 +6,7 @@ import logging
 import sys
 from argparse import ArgumentParser
 
-from quadriga_scaffolding.scaffold import check_data_directory, load_scaffold
+from quadriga_scaffolding.scaffold import load_scaffold, validate_scaffold
 
 
 def main() -> None:
@@ -34,7 +34,7 @@ def main() -> None:
     logging.info(f"Update mode: {args.update}")
     logging.info(scaffold)
 
-    if not check_data_directory(scaffold):
+    if not validate_scaffold(scaffold):
         sys.exit(1)
 
 

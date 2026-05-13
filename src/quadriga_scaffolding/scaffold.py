@@ -82,9 +82,28 @@ def parse_scaffold(f: Iterable[str]) -> Scaffold:
     return scaffold
 
 
-def check_data_directory(scaffold: Scaffold) -> bool:
-    """Verify that every file/dir scheduled for creation exists in packaged data/."""
+def validate_scaffold(scaffold: Scaffold) -> bool:
+    """Validate the scaffold manifest against the packaged ``data/`` tree.
+
+    Only ``create`` entries are checked for existence: every path listed under
+    ``create`` must exist in the packaged ``data/`` directory, with the kind
+    (file vs. directory) matching the manifest entry. ``delete`` entries are
+    not required to exist in ``data/`` — they describe paths to remove from a
+    target OER, not source files — and are therefore skipped.
+
+    Additionally, a path must not appear in both ``create`` and ``delete``.
+
+    Returns ``True`` if all checks pass, ``False`` otherwise (warnings are
+    logged for each failure).
+    """
     result = True
+
+    create_paths = {path for _, path in scaffold["create"]}
+    delete_paths = {path for _, path in scaffold["delete"]}
+    for overlap in create_paths & delete_paths:
+        result = False
+        logging.warning(f"{overlap} appears in both create and delete")
+
     for filetype, file in scaffold["create"]:
         resource = full_canon_path(file)
         if not resource.is_dir() and not resource.is_file():
