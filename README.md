@@ -4,19 +4,27 @@ This tool updates a QUADRIGA OER to contain common files (scripts, CSS, JS, ...)
 
 ## Installation (for development)
 
-The project is a standard `pyproject.toml`-based package managed with [`uv`](https://docs.astral.sh/uv/).
-
-Clone the repository and create the development environment in one step:
+The project is a standard `pyproject.toml`-based package. The recommended way to set up a development environment is via [`just`](https://github.com/casey/just):
 
 ```console
 $ git clone https://github.com/quadriga-dk/quadriga-scaffolding.git
 $ cd quadriga-scaffolding
+$ just install
+```
+
+If you don't have `just` yet, install it via your package manager (e.g. `brew install just`, `apt install just`, `cargo install just`) — see the [just installation docs](https://github.com/casey/just#installation) for more options.
+
+`just install` will detect whether [`uv`](https://docs.astral.sh/uv/) is available and use it (`uv sync`) if so. Otherwise it falls back to creating a `.venv/` with `python3 -m venv` and installing the package in **editable** mode together with the development tools (`pytest`, `ruff`, `mypy`) via `pip`.
+
+If you'd rather run the steps yourself:
+
+With `uv`:
+
+```console
 $ uv sync
 ```
 
-`uv sync` will create a `.venv/`, install the package in **editable** mode, and pull in the development tools listed under `[dependency-groups].dev` (currently `pytest`, `ruff`, `mypy`). The same list is mirrored under `[project.optional-dependencies].dev` so plain `pip` can install them too (see below).
-
-If you prefer plain `pip` over `uv`:
+Or with plain `pip`:
 
 ```console
 $ python3 -m venv .venv
@@ -25,6 +33,18 @@ $ pip install -e ".[dev]"
 ```
 
 ### Running the development tools
+
+With [`just`](https://github.com/casey/just):
+
+```console
+$ just check   # run all checks (ruff, mypy, pytest)
+$ just ruff    # lint
+$ just format  # auto-format
+$ just mypy    # type-check
+$ just test    # tests
+```
+
+Or with `uv`:
 
 ```console
 $ uv run pytest          # tests
@@ -45,14 +65,16 @@ The package installs a `scaffold` console script. The common files and the manif
 To compare the current state of an OER to the newest version of the common files:
 
 ```console
-$ uv run scaffold ../path/to/oer/
+$ just scaffold ../path/to/oer/
 ```
 
 To update the files to the newest version:
 
 ```console
-$ uv run scaffold --update ../path/to/oer/
+$ just scaffold --update ../path/to/oer/
 ```
+
+(`just scaffold` uses `uv run scaffold` when `uv` is available, and falls back to the `scaffold` entry point in `.venv/` otherwise.)
 
 The script will overwrite existing files with their newest version and possibly delete files that were marked as deleted in the scaffolding manifest.
 
