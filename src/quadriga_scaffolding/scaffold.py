@@ -57,6 +57,8 @@ def parse_scaffold(f: Iterable[str]) -> Scaffold:
     scaffold: Scaffold = {"create": [], "delete": []}
 
     for ln, line in enumerate(f):
+        if not line.strip():
+            continue
         if ".." in line:
             raise ValueError("Navigating to parent directories in file paths is not allowed")
 
