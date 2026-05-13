@@ -3,8 +3,21 @@ name = "quadriga-scaffolding"
 version = "0.1.0"
 description = "Update a QUADRIGA OER to contain common files to the latest version."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
+license = "MIT"
+authors = [
+    { name = "Hannes Schnaitter", email = "git@schnaitter.info" },
+]
 dependencies = []
+
+[project.optional-dependencies]
+# Mirrors [dependency-groups].dev so plain pip can install dev tools via
+# `pip install -e ".[dev]"`. Keep the two lists in sync.
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
 
 [project.scripts]
 scaffold = "quadriga_scaffolding.cli:main"
@@ -26,7 +39,7 @@ dev = [
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py314"
 extend-exclude = ["src/quadriga_scaffolding/data"]
 
 [tool.ruff.lint]

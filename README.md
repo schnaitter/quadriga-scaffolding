@@ -14,14 +14,14 @@ $ cd quadriga-scaffolding
 $ uv sync
 ```
 
-`uv sync` will create a `.venv/`, install the package in **editable** mode, and pull in the development tools listed under `[dependency-groups].dev` (currently `pytest`, `ruff`, `mypy`).
+`uv sync` will create a `.venv/`, install the package in **editable** mode, and pull in the development tools listed under `[dependency-groups].dev` (currently `pytest`, `ruff`, `mypy`). The same list is mirrored under `[project.optional-dependencies].dev` so plain `pip` can install them too (see below).
 
 If you prefer plain `pip` over `uv`:
 
 ```console
 $ python3 -m venv .venv
 $ source .venv/bin/activate
-$ pip install -e ".[dev]"  # or: pip install -e . && pip install pytest ruff mypy
+$ pip install -e ".[dev]"
 ```
 
 ### Running the development tools
@@ -29,6 +29,7 @@ $ pip install -e ".[dev]"  # or: pip install -e . && pip install pytest ruff myp
 ```console
 $ uv run pytest          # tests
 $ uv run ruff check .    # lint
+$ uv run ruff format .   # auto-format
 $ uv run mypy            # type-check
 ```
 
