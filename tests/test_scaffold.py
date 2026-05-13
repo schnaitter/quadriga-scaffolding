@@ -2,12 +2,15 @@ from pathlib import Path
 
 import pytest
 
-from quadriga_scaffolding.scaffold import parse_path, parse_scaffold
+from quadriga_scaffolding.scaffold import EntryKind, Scaffold, ScaffoldEntry, parse_path, parse_scaffold
 
 
 def test_parse_scaffold_with_filenames() -> None:
     test_file = ["comment\n", "+ add\n", "- subtract\n"]
-    assert parse_scaffold(test_file) == {"create": [("file", Path("add"))], "delete": [("file", Path("subtract"))]}
+    assert parse_scaffold(test_file) == Scaffold(
+        create=[ScaffoldEntry(EntryKind.FILE, Path("add"))],
+        delete=[ScaffoldEntry(EntryKind.FILE, Path("subtract"))],
+    )
 
 
 def test_parse_scaffold_disallows_navigation_to_parent() -> None:
@@ -17,10 +20,10 @@ def test_parse_scaffold_disallows_navigation_to_parent() -> None:
 
 
 def test_parse_path_as_file() -> None:
-    assert ("file", Path("test/test.py")) == parse_path("test/test.py")
-    assert ("file", Path("test")) == parse_path("test")
+    assert ScaffoldEntry(EntryKind.FILE, Path("test/test.py")) == parse_path("test/test.py")
+    assert ScaffoldEntry(EntryKind.FILE, Path("test")) == parse_path("test")
 
 
 def test_parse_path_as_directory() -> None:
-    assert ("dir", Path("test/test/")) == parse_path("test/test/")
-    assert ("dir", Path("test/")) == parse_path("test/")
+    assert ScaffoldEntry(EntryKind.DIR, Path("test/test/")) == parse_path("test/test/")
+    assert ScaffoldEntry(EntryKind.DIR, Path("test/")) == parse_path("test/")

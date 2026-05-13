@@ -4,12 +4,28 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
+from dataclasses import dataclass, field
+from enum import StrEnum
 from importlib.resources import as_file, files
 from importlib.resources.abc import Traversable
 from pathlib import Path
+from typing import NamedTuple
 
-ScaffoldEntry = tuple[str, Path]
-Scaffold = dict[str, list[ScaffoldEntry]]
+
+class EntryKind(StrEnum):
+    FILE = "file"
+    DIR = "dir"
+
+
+class ScaffoldEntry(NamedTuple):
+    kind: EntryKind
+    path: Path
+
+
+@dataclass(frozen=True)
+class Scaffold:
+    create: list[ScaffoldEntry] = field(default_factory=list)
+    delete: list[ScaffoldEntry] = field(default_factory=list)
 
 
 def package_data_root() -> Traversable:
@@ -34,13 +50,11 @@ def parse_path(pathstring: str) -> ScaffoldEntry:
     if len(pathstring) == 0:
         raise ValueError("Empty path string")
 
-    parsetype = "file"
-    if pathstring[-1] == "/":
-        parsetype = "dir"
+    kind = EntryKind.DIR if pathstring[-1] == "/" else EntryKind.FILE
     path = Path(pathstring)
     if path.is_absolute():
         raise ValueError(f"Absolute paths are not allowed: {pathstring}")
-    return (parsetype, path)
+    return ScaffoldEntry(kind, path)
 
 
 def load_scaffold(filename: str | Path | None = None) -> Scaffold:
@@ -58,7 +72,7 @@ def load_scaffold(filename: str | Path | None = None) -> Scaffold:
 
 
 def parse_scaffold(f: Iterable[str]) -> Scaffold:
-    scaffold: Scaffold = {"create": [], "delete": []}
+    scaffold = Scaffold()
 
     for ln, line in enumerate(f, start=1):
         if not line.strip():
@@ -66,17 +80,17 @@ def parse_scaffold(f: Iterable[str]) -> Scaffold:
 
         match line[0]:
             case "+":
-                path = parse_path(line[2:])
-                if ".." in path[1].parts:
+                entry = parse_path(line[2:])
+                if ".." in entry.path.parts:
                     raise ValueError("Navigating to parent directories in file paths is not allowed")
-                logging.info(f"{ln}: Create '{path}'")
-                scaffold["create"].append(path)
+                logging.info(f"{ln}: Create '{entry}'")
+                scaffold.create.append(entry)
             case "-":
-                path = parse_path(line[2:])
-                if ".." in path[1].parts:
+                entry = parse_path(line[2:])
+                if ".." in entry.path.parts:
                     raise ValueError("Navigating to parent directories in file paths is not allowed")
-                logging.info(f"{ln}: Delete '{path}'")
-                scaffold["delete"].append(path)
+                logging.info(f"{ln}: Delete '{entry}'")
+                scaffold.delete.append(entry)
             case _:
                 logging.info(f"{ln}: Comment")
 
@@ -99,21 +113,21 @@ def validate_scaffold(scaffold: Scaffold) -> bool:
     """
     result = True
 
-    create_paths = {path for _, path in scaffold["create"]}
-    delete_paths = {path for _, path in scaffold["delete"]}
+    create_paths = {entry.path for entry in scaffold.create}
+    delete_paths = {entry.path for entry in scaffold.delete}
     for overlap in create_paths & delete_paths:
         result = False
         logging.warning(f"{overlap} appears in both create and delete")
 
-    for filetype, file in scaffold["create"]:
+    for kind, file in scaffold.create:
         resource = full_canon_path(file)
         if not resource.is_dir() and not resource.is_file():
             result = False
             logging.warning(f"{file} does not exist in packaged data/")
-        elif filetype == "dir" and not resource.is_dir():
+        elif kind is EntryKind.DIR and not resource.is_dir():
             result = False
             logging.warning(f"{file} is not a directory in packaged data/")
-        elif filetype == "file" and not resource.is_file():
+        elif kind is EntryKind.FILE and not resource.is_file():
             result = False
             logging.warning(f"{file} is not a file in packaged data/")
 
