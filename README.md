@@ -55,11 +55,6 @@ $ uv run mypy            # type-check
 
 ## Usage
 
-> **⚠️ Work in progress.** The CLI currently only validates that the packaged
-> `data/` tree matches the manifest. The `oer_path` argument and `--update`
-> flag are accepted but the diff/update behaviour described below is not yet
-> implemented.
-
 The package installs a `scaffold` console script. The common files and the manifest ship with the package via `importlib.resources`, so the tool no longer depends on being run from inside the repository clone.
 
 To compare the current state of an OER to the newest version of the common files:
@@ -76,7 +71,10 @@ $ just scaffold --update ../path/to/oer/
 
 (`just scaffold` uses `uv run scaffold` when `uv` is available, and falls back to the `scaffold` entry point in `.venv/` otherwise.)
 
-The script will overwrite existing files with their newest version and possibly delete files that were marked as deleted in the scaffolding manifest.
+In `--update` mode the script overwrites files with their newest packaged version and removes files (and recursively-empty directories) that the manifest marks for deletion. Two kinds of drift are **never** resolved automatically:
+
+- A directory marked for deletion (`- dir/`) that still contains files is **never** auto-deleted — remove its contents yourself first.
+- Files found inside a managed directory (`+ dir/`) but not listed in the manifest are reported as **untracked** and **never** deleted.
 
 Equivalent invocations:
 
@@ -84,6 +82,31 @@ Equivalent invocations:
 $ uv run python -m quadriga_scaffolding ../path/to/oer/
 $ scaffold ../path/to/oer/        # if the venv is activated
 ```
+
+Pass `--manifest PATH` to compare against a manifest other than the packaged one (useful for testing and local experimentation), and `-v`/`--verbose` to also print in-sync (`ok`) entries.
+
+### Output
+
+Each changed path is printed on its own line with a git-style status letter:
+
+| Letter | Meaning |
+|---|---|
+| `A` | **add** — listed in the manifest but missing in the OER |
+| `M` | **modify** — present but its bytes differ from the packaged version |
+| `D` | **delete** — listed for deletion and removable |
+| `?` | **untracked** — inside a managed `+ dir/` but not in the manifest |
+| `!` | **blocked** — a `- dir/` that is not empty and so cannot be deleted |
+| ` ` | **ok** — already in sync (only shown with `-v`) |
+
+Comparison is byte-exact: no line-ending or whitespace normalization is applied.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | fully in sync (no `A`/`M`/`D`/`?`/`!` after the run) |
+| `1` | drift detected; in `--update` mode this means `?`/`!` items remain after the update |
+| `2` | the manifest is invalid (e.g. a path listed under both `+` and `-`) |
 
 ## Structure of the repo
 
