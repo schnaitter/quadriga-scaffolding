@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import sys
 from argparse import ArgumentParser
+from pathlib import Path
 
-from quadriga_scaffolding.scaffold import load_scaffold, validate_scaffold
+from quadriga_scaffolding.scaffold import diff_oer, format_diff, load_scaffold, validate_scaffold
 
 
 def main() -> None:
@@ -41,13 +42,23 @@ def main() -> None:
         log_level = logging.WARNING
     logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
+    oer_path = Path(args.oer_path)
+    if not oer_path.is_dir():
+        parser.error(f"OER path is not a directory: {oer_path}")
+
     scaffold = load_scaffold()
-    logging.info(f"OER Path: {args.oer_path}")
+    logging.info(f"OER Path: {oer_path}")
     logging.info(f"Update mode: {args.update}")
     logging.info(scaffold)
 
     if not validate_scaffold(scaffold):
-        sys.exit(1)
+        sys.exit(2)
+
+    diff = diff_oer(scaffold, oer_path)
+    output = format_diff(diff, show_ok=args.verbose)
+    if output:
+        print(output)
+    sys.exit(1 if diff.has_drift() else 0)
 
 
 if __name__ == "__main__":
