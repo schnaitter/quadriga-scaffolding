@@ -23,9 +23,11 @@ from quadriga_scaffolding.scaffold import (
     Scaffold,
     ScaffoldEntry,
     apply_update,
+    diff_file,
     diff_oer,
     files_differ,
     format_diff,
+    format_diff_with_content,
     is_ignored,
     iter_packaged_files,
 )
@@ -290,6 +292,79 @@ def test_format_diff_skips_ok_by_default() -> None:
     diff = OerDiff(items=[DiffItem(EntryStatus.OK, Path("ok.py"))])
     assert format_diff(diff) == ""
     assert format_diff(diff, show_ok=True) == "  ok.py"
+
+
+def test_diff_file_unified_diff(pkg: Path, oer: Path) -> None:
+    _write(pkg, "f.py", b"one\ntwo\nthree\n")
+    target = _write(oer, "f.py", b"one\nTWO\nthree\n")
+    out = diff_file(target, Path("f.py"))
+    lines = out.splitlines()
+    assert lines[0] == "--- a/f.py"
+    assert lines[1] == "+++ b/f.py"
+    assert "-two" in lines
+    assert "+TWO" in lines
+
+
+def test_diff_file_binary_files_differ(pkg: Path, oer: Path) -> None:
+    _write(pkg, "img.bin", b"\x00\x01\x02")
+    target = _write(oer, "img.bin", b"\x00\x03\x04")
+    assert diff_file(target, Path("img.bin")) == "Binary files a/img.bin and b/img.bin differ"
+
+
+def test_diff_file_invalid_utf8_is_binary(pkg: Path, oer: Path) -> None:
+    _write(pkg, "f.dat", b"\xff\xfe text")
+    target = _write(oer, "f.dat", b"\xff\xfe other")
+    assert diff_file(target, Path("f.dat")) == "Binary files a/f.dat and b/f.dat differ"
+
+
+def test_format_diff_with_content_appends_diff_after_modify(pkg: Path, oer: Path) -> None:
+    _write(pkg, "f.py", b"new\n")
+    _write(oer, "f.py", b"old\n")
+    _write(pkg, "g.py", b"added\n")  # ADD: no content diff appended
+    scaffold = Scaffold(
+        create=[
+            ScaffoldEntry(EntryKind.FILE, Path("f.py")),
+            ScaffoldEntry(EntryKind.FILE, Path("g.py")),
+        ]
+    )
+    diff = diff_oer(scaffold, oer)
+    out = format_diff_with_content(diff, oer)
+    lines = out.splitlines()
+    assert lines[0] == "A g.py"  # ADD sorts before MODIFY; no diff body follows it
+    assert lines[1] == "M f.py"
+    # The unified diff for f.py follows directly under its M line.
+    assert lines[2] == "--- a/f.py"
+    assert "-new" in lines
+    assert "+old" in lines
+
+
+def test_format_diff_with_content_matches_format_diff_without_modify(pkg: Path, oer: Path) -> None:
+    """With no MODIFY items, content mode produces the same lines as format_diff."""
+    _write(pkg, "f.py", b"hi")
+    scaffold = Scaffold(create=[ScaffoldEntry(EntryKind.FILE, Path("f.py"))])
+    diff = diff_oer(scaffold, oer)  # ADD only
+    assert format_diff_with_content(diff, oer) == format_diff(diff)
+
+
+def test_cli_diff_flag_prints_unified_diff(tmp_path: Path) -> None:
+    """--diff prints a unified diff body under each M line of a drifted OER."""
+    oer = tmp_path / "oer"
+    oer.mkdir()
+    real = sc.load_scaffold()
+    for entry in real.create:
+        for rel in iter_packaged_files(entry):
+            _write(oer, str(rel), sc.read_packaged_bytes(rel))
+
+    first_file = next(
+        rel for entry in real.create for rel in iter_packaged_files(entry) if entry.kind is EntryKind.FILE
+    )
+    (oer / first_file).write_bytes(b"drifted\n")
+
+    result = _run_cli(oer, "--diff")
+    assert result.returncode == EXIT_DRIFT
+    assert f"M {first_file.as_posix()}" in result.stdout
+    assert "--- a/" in result.stdout
+    assert "+drifted" in result.stdout
 
 
 def _run_cli(oer: Path, *extra: str) -> subprocess.CompletedProcess[str]:

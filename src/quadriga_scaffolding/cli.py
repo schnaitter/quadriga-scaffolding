@@ -7,7 +7,14 @@ import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
-from quadriga_scaffolding.scaffold import apply_update, diff_oer, format_diff, load_scaffold, validate_scaffold
+from quadriga_scaffolding.scaffold import (
+    apply_update,
+    diff_oer,
+    format_diff,
+    format_diff_with_content,
+    load_scaffold,
+    validate_scaffold,
+)
 
 
 def main() -> None:
@@ -28,6 +35,11 @@ def main() -> None:
         "--show-ok",
         action="store_true",
         help="Also print in-sync (ok) entries, not just drifted ones",
+    )
+    parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="Print a unified diff of each modified (M) file's contents under its status line",
     )
     parser.add_argument(
         "-v",
@@ -67,7 +79,10 @@ def main() -> None:
     diff = diff_oer(scaffold, oer_path)
     if args.update:
         diff = apply_update(scaffold, oer_path, diff)
-    output = format_diff(diff, show_ok=args.show_ok)
+    if args.diff:
+        output = format_diff_with_content(diff, oer_path, show_ok=args.show_ok)
+    else:
+        output = format_diff(diff, show_ok=args.show_ok)
     if output:
         print(output)
     sys.exit(1 if diff.has_drift() else 0)

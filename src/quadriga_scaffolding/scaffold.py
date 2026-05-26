@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import logging
 import shutil
@@ -372,6 +373,68 @@ def format_diff(diff: OerDiff, *, show_ok: bool = False) -> str:
         if item.detail:
             line += f" ({item.detail})"
         lines.append(line)
+    return "\n".join(lines)
+
+
+def _is_binary(data: bytes) -> bool:
+    """Return ``True`` if ``data`` looks like binary rather than UTF-8 text.
+
+    A NUL byte is a strong binary signal; otherwise we treat content that does
+    not decode as UTF-8 as binary. This mirrors git's "treat as binary unless it
+    cleanly decodes" heuristic closely enough for human-facing diff output.
+    """
+    if b"\x00" in data:
+        return True
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return True
+    return False
+
+
+def diff_file(target: Path, rel: Path) -> str:
+    """Return a git-style unified diff of OER file ``target`` vs packaged ``data/<rel>``.
+
+    The packaged version is the "old" (``a/``) side and the OER file is the
+    "new" (``b/``) side, so the diff reads as the change ``--update`` would undo
+    by overwriting the OER file. If either side is binary, a single
+    ``Binary files ... differ`` line is returned instead of a line diff.
+    """
+    packaged = read_packaged_bytes(rel)
+    current = target.read_bytes()
+    posix = rel.as_posix()
+    if _is_binary(packaged) or _is_binary(current):
+        return f"Binary files a/{posix} and b/{posix} differ"
+
+    packaged_lines = packaged.decode("utf-8").splitlines(keepends=True)
+    current_lines = current.decode("utf-8").splitlines(keepends=True)
+    diff = difflib.unified_diff(
+        packaged_lines,
+        current_lines,
+        fromfile=f"a/{posix}",
+        tofile=f"b/{posix}",
+    )
+    return "".join(diff).rstrip("\n")
+
+
+def format_diff_with_content(diff: OerDiff, oer_root: Path, *, show_ok: bool = False) -> str:
+    """Render ``diff`` as in :func:`format_diff`, with a unified diff after each MODIFY.
+
+    Each status line is emitted exactly as in :func:`format_diff`; every
+    ``MODIFY`` line is followed by its :func:`diff_file` output. ``oer_root`` is
+    needed to read the current OER files for the content diff.
+    """
+    lines: list[str] = []
+    for item in diff.items:
+        if item.status is EntryStatus.OK and not show_ok:
+            continue
+        letter = _STATUS_LETTER[item.status]
+        line = f"{letter:<2}{item.path.as_posix()}"
+        if item.detail:
+            line += f" ({item.detail})"
+        lines.append(line)
+        if item.status is EntryStatus.MODIFY:
+            lines.append(diff_file(oer_root / item.path, item.path))
     return "\n".join(lines)
 
 
