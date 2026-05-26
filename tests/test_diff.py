@@ -324,3 +324,26 @@ def test_cli_exit_codes(tmp_path: Path) -> None:
     manifest = tmp_path / "broken.txt"
     manifest.write_text(f"+ {first_file.as_posix()}\n- {first_file.as_posix()}\n")
     assert _run_cli(oer, "--manifest", str(manifest)).returncode == EXIT_BAD_MANIFEST
+
+
+def test_cli_show_ok_independent_of_verbose(tmp_path: Path) -> None:
+    """--show-ok prints ok lines without INFO log spam; --verbose does not print ok lines."""
+    oer = tmp_path / "oer"
+    oer.mkdir()
+    real = sc.load_scaffold()
+    for entry in real.create:
+        for rel in iter_packaged_files(entry):
+            _write(oer, str(rel), sc.read_packaged_bytes(rel))
+
+    # In-sync tree: default output is empty.
+    assert _run_cli(oer).stdout == ""
+
+    # --show-ok prints ok lines on stdout; logging (stderr) stays quiet.
+    shown = _run_cli(oer, "--show-ok")
+    assert "  " in shown.stdout  # at least one "  <path>" ok line
+    assert shown.stderr == ""
+
+    # --verbose emits INFO logs (stderr) but no ok lines on stdout.
+    verbose = _run_cli(oer, "--verbose")
+    assert verbose.stdout == ""
+    assert "OER Path" in verbose.stderr

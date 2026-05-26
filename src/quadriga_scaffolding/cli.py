@@ -25,6 +25,11 @@ def main() -> None:
         help="Path to a scaffold manifest to use instead of the packaged one",
     )
     parser.add_argument(
+        "--show-ok",
+        action="store_true",
+        help="Also print in-sync (ok) entries, not just drifted ones",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -62,7 +67,7 @@ def main() -> None:
     diff = diff_oer(scaffold, oer_path)
     if args.update:
         diff = apply_update(scaffold, oer_path, diff)
-    output = format_diff(diff, show_ok=args.verbose)
+    output = format_diff(diff, show_ok=args.show_ok)
     if output:
         print(output)
     sys.exit(1 if diff.has_drift() else 0)

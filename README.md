@@ -83,7 +83,7 @@ $ uv run python -m quadriga_scaffolding ../path/to/oer/
 $ scaffold ../path/to/oer/        # if the venv is activated
 ```
 
-Pass `--manifest PATH` to compare against a manifest other than the packaged one (useful for testing and local experimentation), and `-v`/`--verbose` to also print in-sync (`ok`) entries.
+Pass `--manifest PATH` to compare against a manifest other than the packaged one (useful for testing and local experimentation), and `--show-ok` to also print in-sync (`ok`) entries. `-v`/`--verbose` (and `-d`/`--debug`) only affect logging verbosity, not which diff entries are printed.
 
 ### Output
 
@@ -96,7 +96,7 @@ Each changed path is printed on its own line with a git-style status letter:
 | `D` | **delete** — listed for deletion and removable |
 | `?` | **untracked** — inside a managed `+ dir/` but not in the manifest |
 | `!` | **blocked** — a `- dir/` that is not empty and so cannot be deleted |
-| ` ` | **ok** — already in sync (only shown with `-v`) |
+| ` ` | **ok** — already in sync (only shown with `--show-ok`) |
 
 Comparison is byte-exact: no line-ending or whitespace normalization is applied.
 
