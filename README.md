@@ -99,6 +99,8 @@ M _static/quadriga.css
  }
 ```
 
+The diff body is colored git-style (added lines green, removed lines red, hunk headers cyan, file headers bold); the `A`/`M`/`D`/`?`/`!` status lines are never colored. Coloring follows `--color=auto` by default: on when stdout is a terminal, off when the output is piped or redirected, and always off when the [`NO_COLOR`](https://no-color.org) environment variable is set. Pass `--color=always` to force colors (e.g. when piping into a pager that interprets them) or `--color=never` to disable them.
+
 ### Output
 
 Each changed path is printed on its own line with a git-style status letter:
