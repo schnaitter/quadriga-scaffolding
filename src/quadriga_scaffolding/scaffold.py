@@ -207,3 +207,121 @@ def _dir_is_recursively_empty(p: Path) -> bool:
     if not p.is_dir():
         return False
     return not any(child.is_file() for child in p.rglob("*"))
+
+
+def _count_files(p: Path) -> int:
+    """Return the number of regular files anywhere under directory ``p``."""
+    return sum(1 for child in p.rglob("*") if child.is_file())
+
+
+# Ordering of statuses in formatted output: drift first (in legend order), then OK.
+_STATUS_ORDER = {
+    EntryStatus.ADD: 0,
+    EntryStatus.MODIFY: 1,
+    EntryStatus.DELETE: 2,
+    EntryStatus.UNTRACKED: 3,
+    EntryStatus.BLOCKED: 4,
+    EntryStatus.OK: 5,
+}
+
+_STATUS_LETTER = {
+    EntryStatus.ADD: "A",
+    EntryStatus.MODIFY: "M",
+    EntryStatus.DELETE: "D",
+    EntryStatus.UNTRACKED: "?",
+    EntryStatus.BLOCKED: "!",
+    EntryStatus.OK: " ",
+}
+
+
+def _diff_create_entry(entry: ScaffoldEntry, oer_root: Path) -> Iterator[DiffItem]:
+    """Yield diff items for a single ``create`` entry (ADD/MODIFY/OK + UNTRACKED)."""
+    packaged = list(iter_packaged_files(entry))
+    for rel in packaged:
+        target = oer_root / rel
+        if not target.is_file():
+            yield DiffItem(EntryStatus.ADD, rel)
+        elif target.read_bytes() != read_packaged_bytes(rel):
+            yield DiffItem(EntryStatus.MODIFY, rel)
+        else:
+            yield DiffItem(EntryStatus.OK, rel)
+
+    if entry.kind is not EntryKind.DIR:
+        return
+
+    packaged_set = set(packaged)
+    oer_dir = oer_root / entry.path
+    if not oer_dir.is_dir():
+        return
+    for found in oer_dir.rglob("*"):
+        if not found.is_file():
+            continue
+        rel = found.relative_to(oer_root)
+        if rel not in packaged_set:
+            yield DiffItem(EntryStatus.UNTRACKED, rel)
+
+
+def _diff_delete_entry(entry: ScaffoldEntry, oer_root: Path) -> Iterator[DiffItem]:
+    """Yield diff items for a single ``delete`` entry (DELETE/BLOCKED, or nothing)."""
+    target = oer_root / entry.path
+    if entry.kind is EntryKind.FILE:
+        if target.is_file():
+            yield DiffItem(EntryStatus.DELETE, entry.path)
+    elif target.is_dir():
+        if _dir_is_recursively_empty(target):
+            yield DiffItem(EntryStatus.DELETE, entry.path)
+        else:
+            n = _count_files(target)
+            yield DiffItem(EntryStatus.BLOCKED, entry.path, detail=f"{n} files inside")
+
+
+def diff_oer(scaffold: Scaffold, oer_root: Path) -> OerDiff:
+    """Compare an OER tree against the scaffold manifest.
+
+    Every ``create`` entry is expanded to its packaged files; each file is
+    classified as ``ADD`` (missing), ``MODIFY`` (bytes differ), or ``OK``.
+    Files found inside a managed ``+ dir/`` but absent from the packaged tree
+    are reported ``UNTRACKED``. ``delete`` entries yield ``DELETE`` (present
+    file, or present recursively-empty dir) or ``BLOCKED`` (non-empty dir);
+    absent delete targets are omitted entirely.
+
+    The scaffold is assumed valid: call :func:`validate_scaffold` first, since
+    a ``+ dir/`` entry with no matching packaged directory raises while the
+    packaged tree is walked. Path existence is tested with ``is_file`` /
+    ``is_dir``, which follow symlinks, so a symlinked tracked file is compared
+    (and in ``apply_update`` written) through its target.
+    """
+    items: list[DiffItem] = []
+    for entry in scaffold.create:
+        items.extend(_diff_create_entry(entry, oer_root))
+    for entry in scaffold.delete:
+        items.extend(_diff_delete_entry(entry, oer_root))
+
+    # A file may be covered by both a `+ dir/` and a `+ file` entry; keep one
+    # item per path, preferring the status that sorts first (most drifted).
+    best: dict[Path, DiffItem] = {}
+    for item in items:
+        existing = best.get(item.path)
+        if existing is None or _STATUS_ORDER[item.status] < _STATUS_ORDER[existing.status]:
+            best[item.path] = item
+
+    deduped = sorted(best.values(), key=lambda i: (_STATUS_ORDER[i.status], i.path.as_posix()))
+    return OerDiff(items=deduped)
+
+
+def format_diff(diff: OerDiff, *, show_ok: bool = False) -> str:
+    """Render an ``OerDiff`` as git-style status lines, one per drifted item.
+
+    OK items are skipped unless ``show_ok`` is set. Each line is a two-char
+    status column followed by the path, with any ``detail`` in parentheses.
+    """
+    lines: list[str] = []
+    for item in diff.items:
+        if item.status is EntryStatus.OK and not show_ok:
+            continue
+        letter = _STATUS_LETTER[item.status]
+        line = f"{letter:<2}{item.path.as_posix()}"
+        if item.detail:
+            line += f" ({item.detail})"
+        lines.append(line)
+    return "\n".join(lines)
