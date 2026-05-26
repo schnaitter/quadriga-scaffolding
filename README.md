@@ -75,6 +75,7 @@ In `--update` mode the script overwrites files with their newest packaged versio
 
 - A directory marked for deletion (`- dir/`) that still contains files is **never** auto-deleted — remove its contents yourself first.
 - Files found inside a managed directory (`+ dir/`) but not listed in the manifest are reported as **untracked** and **never** deleted.
+- A tracked path that is a symlink (or lies under a symlinked directory) is reported as **blocked** and **never** written through — the tool copies files in cleanly rather than following the link out of the OER tree. Remove the link yourself and re-run.
 
 Equivalent invocations:
 
@@ -111,7 +112,7 @@ Each changed path is printed on its own line with a git-style status letter:
 | `M` | **modify** — present but its bytes differ from the packaged version |
 | `D` | **delete** — listed for deletion and removable |
 | `?` | **untracked** — inside a managed `+ dir/` but not in the manifest |
-| `!` | **blocked** — a `- dir/` that is not empty and so cannot be deleted |
+| `!` | **blocked** — a `- dir/` that is not empty (cannot be deleted), or a tracked target that is a symlink / lies under one (not written through) |
 | ` ` | **ok** — already in sync (only shown with `--show-ok`) |
 
 Comparison is byte-exact: no line-ending or whitespace normalization is applied.
