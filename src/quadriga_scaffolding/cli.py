@@ -7,7 +7,7 @@ import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
-from quadriga_scaffolding.scaffold import diff_oer, format_diff, load_scaffold, validate_scaffold
+from quadriga_scaffolding.scaffold import apply_update, diff_oer, format_diff, load_scaffold, validate_scaffold
 
 
 def main() -> None:
@@ -55,6 +55,8 @@ def main() -> None:
         sys.exit(2)
 
     diff = diff_oer(scaffold, oer_path)
+    if args.update:
+        diff = apply_update(scaffold, oer_path, diff)
     output = format_diff(diff, show_ok=args.verbose)
     if output:
         print(output)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -325,3 +326,38 @@ def format_diff(diff: OerDiff, *, show_ok: bool = False) -> str:
             line += f" ({item.detail})"
         lines.append(line)
     return "\n".join(lines)
+
+
+def apply_update(scaffold: Scaffold, oer_root: Path, diff: OerDiff) -> OerDiff:
+    """Apply the resolvable actions from ``diff`` to the OER, then re-diff.
+
+    ``ADD``/``MODIFY`` copy the packaged bytes into place (creating parent
+    directories). ``DELETE`` unlinks files and removes recursively-empty
+    directories. ``UNTRACKED`` files and ``BLOCKED`` (non-empty) directories
+    are left untouched; ``BLOCKED`` is logged at WARNING level. A fresh
+    ``diff_oer`` is returned so callers get a uniform post-update view.
+
+    Per-item I/O errors (permissions, races) are caught and logged at ERROR
+    level so one unwritable path does not abort the whole run; such items will
+    still show as drift in the returned diff.
+    """
+    for item in diff.items:
+        target = oer_root / item.path
+        try:
+            match item.status:
+                case EntryStatus.ADD | EntryStatus.MODIFY:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(read_packaged_bytes(item.path))
+                case EntryStatus.DELETE:
+                    if target.is_file():
+                        target.unlink()
+                    elif target.is_dir() and _dir_is_recursively_empty(target):
+                        shutil.rmtree(target)
+                case EntryStatus.BLOCKED:
+                    logging.warning(f"{item.path} not deleted ({item.detail}); remove its contents manually")
+                case EntryStatus.UNTRACKED | EntryStatus.OK:
+                    pass
+        except OSError as exc:
+            logging.error(f"{item.path}: could not apply {item.status} ({exc})")
+
+    return diff_oer(scaffold, oer_root)
