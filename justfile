@@ -48,8 +48,15 @@ test:
     @just _run pytest
 
 # Run the scaffold CLI (uses uv run if available, otherwise the .venv)
+# scaffold exits 1 when it finds drift; that's a signal, not a recipe failure,
+# so run it directly (not via _run) and swallow the exit code.
 scaffold *ARGS:
-    @just _run scaffold {{ARGS}}
+    #!/usr/bin/env bash
+    if command -v uv >/dev/null 2>&1; then
+        uv run scaffold {{ARGS}} || true
+    else
+        ./.venv/bin/scaffold {{ARGS}} || true
+    fi
 
 # Format code with ruff
 format:
