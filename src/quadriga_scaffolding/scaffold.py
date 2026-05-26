@@ -67,6 +67,20 @@ class OerDiff:
         return any(i.status is not EntryStatus.OK for i in self.items)
 
 
+# Build/editor/VCS artifacts that are never intentional scaffold content. Any
+# path component matching one of these is ignored on both sides of a diff, so
+# such files are neither synced from the package nor reported as untracked.
+_IGNORED_NAMES = frozenset({"__pycache__", ".DS_Store", ".ipynb_checkpoints", ".git"})
+_IGNORED_SUFFIXES = (".pyc", ".pyo")
+
+
+def is_ignored(rel: Path) -> bool:
+    """Return ``True`` if any component of ``rel`` is a build/editor/VCS artifact."""
+    if any(part in _IGNORED_NAMES for part in rel.parts):
+        return True
+    return rel.suffix in _IGNORED_SUFFIXES
+
+
 def package_data_root() -> Traversable:
     """Return the packaged ``data/`` directory as a Traversable resource."""
     return files("quadriga_scaffolding") / "data"
@@ -186,6 +200,8 @@ def iter_packaged_files(entry: ScaffoldEntry) -> Iterator[Path]:
     def walk(resource: Traversable, rel: Path) -> Iterator[Path]:
         for child in resource.iterdir():
             child_rel = rel / child.name
+            if is_ignored(child_rel):
+                continue
             if child.is_dir():
                 yield from walk(child, child_rel)
             elif child.is_file():
@@ -220,20 +236,28 @@ def files_differ(target: Path, rel: Path) -> bool:
     return _md5(target.read_bytes()) != _md5(packaged)
 
 
-def _dir_is_recursively_empty(p: Path) -> bool:
-    """Return ``True`` iff ``p`` is a directory containing no regular files.
+def _iter_content_files(p: Path) -> Iterator[Path]:
+    """Yield regular files anywhere under ``p``, excluding build/editor artifacts."""
+    for child in p.rglob("*"):
+        if child.is_file() and not is_ignored(child):
+            yield child
 
-    Empty subdirectories (at any depth) are allowed; any regular file anywhere
-    in the tree makes the directory non-empty.
+
+def _count_content_files(p: Path) -> int:
+    """Return the number of content files anywhere under directory ``p``.
+
+    Empty subdirectories (at any depth) and ignored artifacts (``__pycache__``,
+    ``.DS_Store``, ...) are not counted; ``0`` means the directory is
+    recursively empty.
     """
+    return sum(1 for _ in _iter_content_files(p))
+
+
+def _dir_is_recursively_empty(p: Path) -> bool:
+    """Return ``True`` iff ``p`` is a directory containing no content files."""
     if not p.is_dir():
         return False
-    return not any(child.is_file() for child in p.rglob("*"))
-
-
-def _count_files(p: Path) -> int:
-    """Return the number of regular files anywhere under directory ``p``."""
-    return sum(1 for child in p.rglob("*") if child.is_file())
+    return next(_iter_content_files(p), None) is None
 
 
 # Ordering of statuses in formatted output: drift first (in legend order), then OK.
@@ -290,10 +314,10 @@ def _diff_delete_entry(entry: ScaffoldEntry, oer_root: Path) -> Iterator[DiffIte
         if target.is_file():
             yield DiffItem(EntryStatus.DELETE, entry.path)
     elif target.is_dir():
-        if _dir_is_recursively_empty(target):
+        n = _count_content_files(target)
+        if n == 0:
             yield DiffItem(EntryStatus.DELETE, entry.path)
         else:
-            n = _count_files(target)
             yield DiffItem(EntryStatus.BLOCKED, entry.path, detail=f"{n} files inside")
 
 

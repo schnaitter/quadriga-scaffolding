@@ -100,6 +100,8 @@ Each changed path is printed on its own line with a git-style status letter:
 
 Comparison is byte-exact: no line-ending or whitespace normalization is applied.
 
+Build, editor, and VCS artifacts are ignored everywhere — `__pycache__/`, `*.pyc`/`*.pyo`, `.DS_Store`, `.ipynb_checkpoints/`, and `.git/`. They are never synced from the package, never reported as untracked, and a `- dir/` containing only such artifacts counts as empty (and so is removable).
+
 ### Exit codes
 
 | Code | Meaning |
