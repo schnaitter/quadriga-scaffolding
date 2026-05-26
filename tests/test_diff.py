@@ -238,6 +238,41 @@ def test_apply_update_leaves_untracked_in_place(pkg: Path, oer: Path) -> None:
     assert drifted == [DiffItem(EntryStatus.UNTRACKED, Path("d/extra.py"))]
 
 
+def test_diff_blocks_symlinked_tracked_file(pkg: Path, oer: Path) -> None:
+    """A tracked file that is a symlink is BLOCKED, never compared through its target."""
+    _write(pkg, "f.py", b"packaged")
+    outside = _write(oer.parent, "outside.py", b"link target")
+    (oer / "f.py").symlink_to(outside)
+    scaffold = Scaffold(create=[ScaffoldEntry(EntryKind.FILE, Path("f.py"))])
+    diff = diff_oer(scaffold, oer)
+    assert diff.items == [DiffItem(EntryStatus.BLOCKED, Path("f.py"), detail="symlink")]
+
+
+def test_apply_update_does_not_write_through_symlinked_file(pkg: Path, oer: Path) -> None:
+    """--update never follows a symlinked target: the link's target stays untouched."""
+    _write(pkg, "f.py", b"packaged")
+    outside = _write(oer.parent, "outside.py", b"link target")
+    (oer / "f.py").symlink_to(outside)
+    scaffold = Scaffold(create=[ScaffoldEntry(EntryKind.FILE, Path("f.py"))])
+    post = apply_update(scaffold, oer, diff_oer(scaffold, oer))
+    assert outside.read_bytes() == b"link target"  # not clobbered through the link
+    assert (oer / "f.py").is_symlink()  # link itself left in place
+    assert post.items == [DiffItem(EntryStatus.BLOCKED, Path("f.py"), detail="symlink")]
+
+
+def test_diff_blocks_file_under_symlinked_parent_dir(pkg: Path, oer: Path) -> None:
+    """A packaged file whose OER parent dir is a symlink is BLOCKED, not written through."""
+    _write(pkg, "d/a.py", b"a")
+    real = oer.parent / "real_d"
+    real.mkdir()
+    (oer / "d").symlink_to(real, target_is_directory=True)
+    scaffold = Scaffold(create=[ScaffoldEntry(EntryKind.DIR, Path("d"))])
+    diff = diff_oer(scaffold, oer)
+    assert DiffItem(EntryStatus.BLOCKED, Path("d/a.py"), detail="symlink") in diff.items
+    apply_update(scaffold, oer, diff)
+    assert not (real / "a.py").exists()  # nothing written into the link target
+
+
 def test_apply_update_does_not_remove_blocked_dir(pkg: Path, oer: Path) -> None:
     _write(oer, "full/a.py", b"a")
     scaffold = Scaffold(delete=[ScaffoldEntry(EntryKind.DIR, Path("full"))])

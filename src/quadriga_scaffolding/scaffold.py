@@ -282,17 +282,46 @@ _STATUS_LETTER = {
 }
 
 
+def _symlink_in_path(target: Path, oer_root: Path) -> bool:
+    """Return ``True`` if ``target`` or any of its components below ``oer_root`` is a symlink.
+
+    Walks from ``oer_root`` down to ``target`` checking each step with
+    ``is_symlink`` (which does *not* follow links). A symlinked tracked file
+    would let a write escape to the link's target, and a symlinked parent
+    directory would redirect the whole subtree, so either makes the path
+    unsafe to write cleanly.
+    """
+    rel = target.relative_to(oer_root)
+    current = oer_root
+    for part in rel.parts:
+        current = current / part
+        if current.is_symlink():
+            return True
+    return False
+
+
+def _classify_packaged_file(rel: Path, oer_root: Path) -> DiffItem:
+    """Classify one packaged file against the OER as BLOCKED/ADD/MODIFY/OK.
+
+    A symlinked target (or one under a symlinked parent) is ``BLOCKED`` so it is
+    never written through; otherwise it is ``ADD`` (missing), ``MODIFY`` (bytes
+    differ), or ``OK``.
+    """
+    target = oer_root / rel
+    if _symlink_in_path(target, oer_root):
+        return DiffItem(EntryStatus.BLOCKED, rel, detail="symlink")
+    if not target.is_file():
+        return DiffItem(EntryStatus.ADD, rel)
+    if files_differ(target, rel):
+        return DiffItem(EntryStatus.MODIFY, rel)
+    return DiffItem(EntryStatus.OK, rel)
+
+
 def _diff_create_entry(entry: ScaffoldEntry, oer_root: Path) -> Iterator[DiffItem]:
     """Yield diff items for a single ``create`` entry (ADD/MODIFY/OK + UNTRACKED)."""
     packaged = list(iter_packaged_files(entry))
     for rel in packaged:
-        target = oer_root / rel
-        if not target.is_file():
-            yield DiffItem(EntryStatus.ADD, rel)
-        elif files_differ(target, rel):
-            yield DiffItem(EntryStatus.MODIFY, rel)
-        else:
-            yield DiffItem(EntryStatus.OK, rel)
+        yield _classify_packaged_file(rel, oer_root)
 
     if entry.kind is not EntryKind.DIR:
         return
@@ -337,9 +366,10 @@ def diff_oer(scaffold: Scaffold, oer_root: Path) -> OerDiff:
 
     The scaffold is assumed valid: call :func:`validate_scaffold` first, since
     a ``+ dir/`` entry with no matching packaged directory raises while the
-    packaged tree is walked. Path existence is tested with ``is_file`` /
-    ``is_dir``, which follow symlinks, so a symlinked tracked file is compared
-    (and in ``apply_update`` written) through its target.
+    packaged tree is walked. A tracked path that is itself a symlink, or that
+    lies under a symlinked directory, is reported ``BLOCKED`` (detail
+    ``"symlink"``) and never written: the tool copies files in cleanly rather
+    than following links out of the OER tree (see :func:`_symlink_in_path`).
     """
     items: list[DiffItem] = []
     for entry in scaffold.create:
@@ -502,14 +532,32 @@ def format_diff_with_content(
     return "\n".join(lines)
 
 
+_SYMLINK_SKIP_MSG = "{path} not written (symlink); remove the link manually"
+
+
+def _write_packaged(target: Path, oer_root: Path, rel: Path) -> None:
+    """Copy packaged ``data/<rel>`` to ``target``, refusing to follow any symlink.
+
+    diff_oer already classifies symlinked targets as BLOCKED, but this guards the
+    write directly too: following a link would escape the OER tree or clobber the
+    link's target instead of copying the file in cleanly.
+    """
+    if _symlink_in_path(target, oer_root):
+        logging.warning(_SYMLINK_SKIP_MSG.format(path=rel))
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(read_packaged_bytes(rel))
+
+
 def apply_update(scaffold: Scaffold, oer_root: Path, diff: OerDiff) -> OerDiff:
     """Apply the resolvable actions from ``diff`` to the OER, then re-diff.
 
     ``ADD``/``MODIFY`` copy the packaged bytes into place (creating parent
-    directories). ``DELETE`` unlinks files and removes recursively-empty
-    directories. ``UNTRACKED`` files and ``BLOCKED`` (non-empty) directories
-    are left untouched; ``BLOCKED`` is logged at WARNING level. A fresh
-    ``diff_oer`` is returned so callers get a uniform post-update view.
+    directories) but never write through a symlink. ``DELETE`` unlinks files and
+    removes recursively-empty directories. ``UNTRACKED`` files and ``BLOCKED``
+    entries (non-empty delete dirs, or symlinked targets) are left untouched;
+    ``BLOCKED`` is logged at WARNING level. A fresh ``diff_oer`` is returned so
+    callers get a uniform post-update view.
 
     Per-item I/O errors (permissions, races) are caught and logged at ERROR
     level so one unwritable path does not abort the whole run; such items will
@@ -520,13 +568,14 @@ def apply_update(scaffold: Scaffold, oer_root: Path, diff: OerDiff) -> OerDiff:
         try:
             match item.status:
                 case EntryStatus.ADD | EntryStatus.MODIFY:
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(read_packaged_bytes(item.path))
+                    _write_packaged(target, oer_root, item.path)
                 case EntryStatus.DELETE:
                     if target.is_file():
                         target.unlink()
                     elif target.is_dir() and _dir_is_recursively_empty(target):
                         shutil.rmtree(target)
+                case EntryStatus.BLOCKED if item.detail == "symlink":
+                    logging.warning(_SYMLINK_SKIP_MSG.format(path=item.path))
                 case EntryStatus.BLOCKED:
                     logging.warning(f"{item.path} not deleted ({item.detail}); remove its contents manually")
                 case EntryStatus.UNTRACKED | EntryStatus.OK:
