@@ -23,6 +23,7 @@ from quadriga_scaffolding.scaffold import (
     Scaffold,
     ScaffoldEntry,
     apply_update,
+    colorize_diff,
     diff_file,
     diff_oer,
     files_differ,
@@ -30,6 +31,7 @@ from quadriga_scaffolding.scaffold import (
     format_diff_with_content,
     is_ignored,
     iter_packaged_files,
+    should_colorize,
 )
 
 EXIT_OK = 0
@@ -336,6 +338,93 @@ def test_format_diff_with_content_appends_diff_after_modify(pkg: Path, oer: Path
     assert lines[2] == "--- a/f.py"
     assert "-new" in lines
     assert "+old" in lines
+
+
+GREEN = "\x1b[32m"
+RED = "\x1b[31m"
+CYAN = "\x1b[36m"
+BOLD = "\x1b[1m"
+RESET = "\x1b[0m"
+
+
+def test_colorize_diff_wraps_lines_by_kind() -> None:
+    text = "\n".join(
+        [
+            "--- a/f.py",
+            "+++ b/f.py",
+            "@@ -1 +1 @@",
+            "-old",
+            "+new",
+            " context",
+            "Binary files a/x and b/x differ",
+        ]
+    )
+    out = colorize_diff(text).splitlines()
+    assert out[0] == f"{BOLD}--- a/f.py{RESET}"
+    assert out[1] == f"{BOLD}+++ b/f.py{RESET}"
+    assert out[2] == f"{CYAN}@@ -1 +1 @@{RESET}"
+    assert out[3] == f"{RED}-old{RESET}"
+    assert out[4] == f"{GREEN}+new{RESET}"
+    assert out[5] == " context"  # context lines untouched
+    assert out[6] == f"{BOLD}Binary files a/x and b/x differ{RESET}"
+
+
+def test_format_diff_with_content_color_wraps_only_body(pkg: Path, oer: Path) -> None:
+    _write(pkg, "f.py", b"new\n")
+    _write(oer, "f.py", b"old\n")
+    scaffold = Scaffold(create=[ScaffoldEntry(EntryKind.FILE, Path("f.py"))])
+    diff = diff_oer(scaffold, oer)
+    out = format_diff_with_content(diff, oer, color=True)
+    lines = out.splitlines()
+    assert lines[0] == "M f.py"  # status line is never colored
+    assert RESET in out and (GREEN in out or RED in out)  # body is colored
+
+
+class _FakeStream:
+    def __init__(self, isatty: bool) -> None:
+        self._isatty = isatty
+
+    def isatty(self) -> bool:
+        return self._isatty
+
+
+def test_should_colorize_always_and_never(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    assert should_colorize("always", _FakeStream(isatty=False)) is True
+    assert should_colorize("never", _FakeStream(isatty=True)) is False
+
+
+def test_should_colorize_auto_follows_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    assert should_colorize("auto", _FakeStream(isatty=True)) is True
+    assert should_colorize("auto", _FakeStream(isatty=False)) is False
+
+
+def test_should_colorize_no_color_overrides_auto(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert should_colorize("auto", _FakeStream(isatty=True)) is False
+    # NO_COLOR does not override an explicit --color=always.
+    assert should_colorize("always", _FakeStream(isatty=True)) is True
+
+
+def test_cli_diff_not_colored_when_piped(tmp_path: Path) -> None:
+    """Captured (non-TTY) output carries no ANSI codes under default --color=auto."""
+    oer = tmp_path / "oer"
+    oer.mkdir()
+    real = sc.load_scaffold()
+    for entry in real.create:
+        for rel in iter_packaged_files(entry):
+            _write(oer, str(rel), sc.read_packaged_bytes(rel))
+    first_file = next(
+        rel for entry in real.create for rel in iter_packaged_files(entry) if entry.kind is EntryKind.FILE
+    )
+    (oer / first_file).write_bytes(b"drifted\n")
+
+    piped = _run_cli(oer, "--diff")
+    assert "\x1b[" not in piped.stdout  # auto -> off when captured
+
+    forced = _run_cli(oer, "--diff", "--color=always")
+    assert "\x1b[" in forced.stdout  # always -> on even when captured
 
 
 def test_format_diff_with_content_matches_format_diff_without_modify(pkg: Path, oer: Path) -> None:

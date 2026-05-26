@@ -13,6 +13,7 @@ from quadriga_scaffolding.scaffold import (
     format_diff,
     format_diff_with_content,
     load_scaffold,
+    should_colorize,
     validate_scaffold,
 )
 
@@ -40,6 +41,12 @@ def main() -> None:
         "--diff",
         action="store_true",
         help="Print a unified diff of each modified (M) file's contents under its status line",
+    )
+    parser.add_argument(
+        "--color",
+        choices=("auto", "always", "never"),
+        default="auto",
+        help="Colorize the --diff output: auto (TTY only, the default), always, or never",
     )
     parser.add_argument(
         "-v",
@@ -80,7 +87,8 @@ def main() -> None:
     if args.update:
         diff = apply_update(scaffold, oer_path, diff)
     if args.diff:
-        output = format_diff_with_content(diff, oer_path, show_ok=args.show_ok)
+        color = should_colorize(args.color, sys.stdout)
+        output = format_diff_with_content(diff, oer_path, show_ok=args.show_ok, color=color)
     else:
         output = format_diff(diff, show_ok=args.show_ok)
     if output:
