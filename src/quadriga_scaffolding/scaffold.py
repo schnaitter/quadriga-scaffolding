@@ -5,6 +5,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import logging
+import os
 import shutil
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
@@ -417,12 +418,74 @@ def diff_file(target: Path, rel: Path) -> str:
     return "".join(diff).rstrip("\n")
 
 
-def format_diff_with_content(diff: OerDiff, oer_root: Path, *, show_ok: bool = False) -> str:
+# ANSI SGR codes used to colorize a unified diff, mirroring git's defaults:
+# added lines green, removed lines red, hunk headers cyan, file headers bold.
+_ANSI_RESET = "\x1b[0m"
+_ANSI_ADD = "\x1b[32m"
+_ANSI_DEL = "\x1b[31m"
+_ANSI_HUNK = "\x1b[36m"
+_ANSI_HEADER = "\x1b[1m"
+
+
+def colorize_diff(text: str) -> str:
+    """Wrap the lines of a unified diff in ANSI color codes, git-diff style.
+
+    Each line is classified by its leading character(s): ``+++``/``---`` file
+    headers are bold, ``@@`` hunk headers cyan, ``+`` additions green, ``-``
+    removals red, and context lines are left uncolored. ``Binary files ...``
+    notes get the same bold treatment as a header. The input is assumed to be
+    :func:`diff_file` output; callers decide *whether* to colorize (see
+    :func:`should_colorize`).
+    """
+    out: list[str] = []
+    for line in text.split("\n"):
+        if line.startswith(("+++", "---")) or line.startswith("Binary files "):
+            color = _ANSI_HEADER
+        elif line.startswith("@@"):
+            color = _ANSI_HUNK
+        elif line.startswith("+"):
+            color = _ANSI_ADD
+        elif line.startswith("-"):
+            color = _ANSI_DEL
+        else:
+            out.append(line)
+            continue
+        out.append(f"{color}{line}{_ANSI_RESET}")
+    return "\n".join(out)
+
+
+def should_colorize(when: str, stream: object) -> bool:
+    """Resolve a ``--color`` choice against the environment and output ``stream``.
+
+    ``when`` is ``"always"``, ``"never"``, or ``"auto"``. ``auto`` enables color
+    only when ``stream`` is a TTY and the ``NO_COLOR`` environment variable is
+    unset (see https://no-color.org). ``always`` ignores both; ``never`` is
+    always off.
+    """
+    if when == "always":
+        return True
+    if when == "never":
+        return False
+    if os.environ.get("NO_COLOR"):
+        return False
+    isatty = getattr(stream, "isatty", None)
+    return bool(isatty and isatty())
+
+
+def format_diff_with_content(
+    diff: OerDiff,
+    oer_root: Path,
+    *,
+    show_ok: bool = False,
+    color: bool = False,
+) -> str:
     """Render ``diff`` as in :func:`format_diff`, with a unified diff after each MODIFY.
 
     Each status line is emitted exactly as in :func:`format_diff`; every
     ``MODIFY`` line is followed by its :func:`diff_file` output. ``oer_root`` is
-    needed to read the current OER files for the content diff.
+    needed to read the current OER files for the content diff. When ``color`` is
+    set, each diff body is wrapped in ANSI codes via :func:`colorize_diff`; the
+    status lines themselves are never colored.
     """
     lines: list[str] = []
     for item in diff.items:
@@ -434,7 +497,8 @@ def format_diff_with_content(diff: OerDiff, oer_root: Path, *, show_ok: bool = F
             line += f" ({item.detail})"
         lines.append(line)
         if item.status is EntryStatus.MODIFY:
-            lines.append(diff_file(oer_root / item.path, item.path))
+            body = diff_file(oer_root / item.path, item.path)
+            lines.append(colorize_diff(body) if color else body)
     return "\n".join(lines)
 
 
