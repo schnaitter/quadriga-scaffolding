@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
 from importlib.resources import as_file, files
@@ -32,6 +32,37 @@ class Scaffold:
 
     create: list[ScaffoldEntry] = field(default_factory=list)
     delete: list[ScaffoldEntry] = field(default_factory=list)
+
+
+class EntryStatus(StrEnum):
+    """Status of a single path when an OER is compared against the scaffold."""
+
+    OK = "ok"
+    ADD = "add"
+    MODIFY = "modify"
+    DELETE = "delete"
+    UNTRACKED = "untracked"
+    BLOCKED = "blocked"
+
+
+@dataclass(frozen=True)
+class DiffItem:
+    """A single path's status in an OER diff, with its path relative to the OER root."""
+
+    status: EntryStatus
+    path: Path
+    detail: str = ""
+
+
+@dataclass
+class OerDiff:
+    """The full set of per-path statuses produced by comparing an OER to the scaffold."""
+
+    items: list[DiffItem] = field(default_factory=list)
+
+    def has_drift(self) -> bool:
+        """Return ``True`` if any item is not in sync (i.e. has a non-OK status)."""
+        return any(i.status is not EntryStatus.OK for i in self.items)
 
 
 def package_data_root() -> Traversable:
@@ -137,3 +168,42 @@ def validate_scaffold(scaffold: Scaffold) -> bool:
             logging.warning(f"{file} is not a file in packaged data/")
 
     return result
+
+
+def iter_packaged_files(entry: ScaffoldEntry) -> Iterator[Path]:
+    """Yield every packaged file covered by ``entry``, relative to ``data/``.
+
+    For a ``FILE`` entry this is just ``entry.path``. For a ``DIR`` entry the
+    packaged ``data/<entry.path>`` tree is walked recursively and the path of
+    every regular file is yielded (each starting with ``entry.path``).
+    """
+    if entry.kind is EntryKind.FILE:
+        yield entry.path
+        return
+
+    def walk(resource: Traversable, rel: Path) -> Iterator[Path]:
+        for child in resource.iterdir():
+            child_rel = rel / child.name
+            if child.is_dir():
+                yield from walk(child, child_rel)
+            elif child.is_file():
+                yield child_rel
+
+    root = package_data_root().joinpath(*entry.path.parts)
+    yield from walk(root, entry.path)
+
+
+def read_packaged_bytes(rel: Path) -> bytes:
+    """Read the bytes of the packaged file at ``data/<rel>``."""
+    return package_data_root().joinpath(*rel.parts).read_bytes()
+
+
+def _dir_is_recursively_empty(p: Path) -> bool:
+    """Return ``True`` iff ``p`` is a directory containing no regular files.
+
+    Empty subdirectories (at any depth) are allowed; any regular file anywhere
+    in the tree makes the directory non-empty.
+    """
+    if not p.is_dir():
+        return False
+    return not any(child.is_file() for child in p.rglob("*"))
