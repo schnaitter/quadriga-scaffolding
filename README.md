@@ -85,6 +85,20 @@ $ scaffold ../path/to/oer/        # if the venv is activated
 
 Pass `--manifest PATH` to compare against a manifest other than the packaged one (useful for testing and local experimentation), and `--show-ok` to also print in-sync (`ok`) entries. `-v`/`--verbose` (and `-d`/`--debug`) only affect logging verbosity, not which diff entries are printed.
 
+Pass `--diff` to print a git-style unified diff of each modified (`M`) file directly under its status line, so you can see *what* would change before running `--update`. The packaged version is the `a/` (old) side and the OER's current file is the `b/` (new) side. Files that are not valid UTF-8 (or contain NUL bytes) are reported as `Binary files a/… and b/… differ` instead of a line diff. `--diff` only adds content for `M` entries; `A`/`D`/`?`/`!` lines are unchanged. In `--update` mode the modifications are resolved first, so there is nothing left to diff.
+
+```console
+$ just scaffold --diff ../path/to/oer/
+M _static/quadriga.css
+--- a/_static/quadriga.css
++++ b/_static/quadriga.css
+@@ -1,3 +1,3 @@
+ body {
+-  color: #000;
++  color: #111;
+ }
+```
+
 ### Output
 
 Each changed path is printed on its own line with a git-style status letter:
