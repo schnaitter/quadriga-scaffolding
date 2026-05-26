@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import shutil
 from collections.abc import Iterable, Iterator
@@ -199,6 +200,26 @@ def read_packaged_bytes(rel: Path) -> bytes:
     return package_data_root().joinpath(*rel.parts).read_bytes()
 
 
+def _md5(data: bytes) -> str:
+    """Return the MD5 hex digest of ``data`` (used only for change detection)."""
+    return hashlib.md5(data, usedforsecurity=False).hexdigest()
+
+
+def files_differ(target: Path, rel: Path) -> bool:
+    """Return ``True`` if the OER file at ``target`` differs from packaged ``data/<rel>``.
+
+    The packaged bytes are read once; if their length already differs from the
+    OER file's size the files are known to differ and the OER file is never
+    read. Otherwise both sides are compared by MD5 digest rather than by
+    holding both byte strings in memory at once. MD5 is used purely for change
+    detection, not security.
+    """
+    packaged = read_packaged_bytes(rel)
+    if target.stat().st_size != len(packaged):
+        return True
+    return _md5(target.read_bytes()) != _md5(packaged)
+
+
 def _dir_is_recursively_empty(p: Path) -> bool:
     """Return ``True`` iff ``p`` is a directory containing no regular files.
 
@@ -242,7 +263,7 @@ def _diff_create_entry(entry: ScaffoldEntry, oer_root: Path) -> Iterator[DiffIte
         target = oer_root / rel
         if not target.is_file():
             yield DiffItem(EntryStatus.ADD, rel)
-        elif target.read_bytes() != read_packaged_bytes(rel):
+        elif files_differ(target, rel):
             yield DiffItem(EntryStatus.MODIFY, rel)
         else:
             yield DiffItem(EntryStatus.OK, rel)
