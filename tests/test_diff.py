@@ -26,6 +26,7 @@ from quadriga_scaffolding.scaffold import (
     diff_oer,
     files_differ,
     format_diff,
+    is_ignored,
     iter_packaged_files,
 )
 
@@ -126,6 +127,53 @@ def test_diff_dedups_path_covered_by_dir_and_file(pkg: Path, oer: Path) -> None:
     (oer / "d" / "a.py").write_bytes(b"changed")
     diff = diff_oer(scaffold, oer)
     assert diff.items == [DiffItem(EntryStatus.MODIFY, Path("d/a.py"))]
+
+
+@pytest.mark.parametrize(
+    ("rel", "ignored"),
+    [
+        ("pkg/__pycache__/mod.cpython-314.pyc", True),
+        ("a/b/__pycache__/x.pyc", True),
+        ("mod.pyc", True),
+        ("mod.pyo", True),
+        (".DS_Store", True),
+        ("sub/.DS_Store", True),
+        (".ipynb_checkpoints/nb.ipynb", True),
+        (".git/config", True),
+        ("quadriga/colors.py", False),
+        ("_static/quadriga.css", False),
+    ],
+)
+def test_is_ignored(rel: str, ignored: bool) -> None:
+    assert is_ignored(Path(rel)) is ignored
+
+
+def test_iter_packaged_files_skips_artifacts(pkg: Path) -> None:
+    _write(pkg, "d/a.py", b"a")
+    _write(pkg, "d/__pycache__/a.cpython-314.pyc", b"junk")
+    _write(pkg, "d/.DS_Store", b"junk")
+    entry = ScaffoldEntry(EntryKind.DIR, Path("d"))
+    assert set(iter_packaged_files(entry)) == {Path("d/a.py")}
+
+
+def test_diff_does_not_report_artifacts_as_untracked(pkg: Path, oer: Path) -> None:
+    _write(pkg, "d/a.py", b"a")
+    _write(oer, "d/a.py", b"a")
+    _write(oer, "d/__pycache__/a.cpython-314.pyc", b"junk")
+    _write(oer, "d/.DS_Store", b"junk")
+    scaffold = Scaffold(create=[ScaffoldEntry(EntryKind.DIR, Path("d"))])
+    diff = diff_oer(scaffold, oer)
+    assert not diff.has_drift()
+
+
+def test_delete_dir_with_only_artifacts_is_empty(pkg: Path, oer: Path) -> None:
+    _write(oer, "old/__pycache__/x.pyc", b"junk")
+    _write(oer, "old/.DS_Store", b"junk")
+    scaffold = Scaffold(delete=[ScaffoldEntry(EntryKind.DIR, Path("old"))])
+    diff = diff_oer(scaffold, oer)
+    assert diff.items == [DiffItem(EntryStatus.DELETE, Path("old"))]
+    apply_update(scaffold, oer, diff)
+    assert not (oer / "old").exists()
 
 
 def test_diff_delete_file_present_and_absent(pkg: Path, oer: Path) -> None:
