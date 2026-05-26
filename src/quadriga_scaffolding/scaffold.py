@@ -303,6 +303,8 @@ def _diff_create_entry(entry: ScaffoldEntry, oer_root: Path) -> Iterator[DiffIte
         if not found.is_file():
             continue
         rel = found.relative_to(oer_root)
+        if is_ignored(rel):
+            continue
         if rel not in packaged_set:
             yield DiffItem(EntryStatus.UNTRACKED, rel)
 
