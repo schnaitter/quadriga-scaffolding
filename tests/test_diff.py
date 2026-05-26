@@ -24,6 +24,7 @@ from quadriga_scaffolding.scaffold import (
     ScaffoldEntry,
     apply_update,
     diff_oer,
+    files_differ,
     format_diff,
     iter_packaged_files,
 )
@@ -63,6 +64,14 @@ def test_iter_packaged_files_expands_directory(pkg: Path) -> None:
     _write(pkg, "d/sub/b.py", b"b")
     entry = ScaffoldEntry(EntryKind.DIR, Path("d"))
     assert set(iter_packaged_files(entry)) == {Path("d/a.py"), Path("d/sub/b.py")}
+
+
+def test_files_differ_by_content(pkg: Path, oer: Path) -> None:
+    _write(pkg, "f.py", b"same")
+    same = _write(oer, "f.py", b"same")
+    assert files_differ(same, Path("f.py")) is False
+    same.write_bytes(b"changed")
+    assert files_differ(same, Path("f.py")) is True
 
 
 def test_diff_detects_add(pkg: Path, oer: Path) -> None:
