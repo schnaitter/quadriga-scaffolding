@@ -20,6 +20,11 @@ def main() -> None:
         help="Update files to the newest version instead of just comparing",
     )
     parser.add_argument(
+        "--manifest",
+        default=None,
+        help="Path to a scaffold manifest to use instead of the packaged one",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -46,7 +51,7 @@ def main() -> None:
     if not oer_path.is_dir():
         parser.error(f"OER path is not a directory: {oer_path}")
 
-    scaffold = load_scaffold()
+    scaffold = load_scaffold(args.manifest)
     logging.info(f"OER Path: {oer_path}")
     logging.info(f"Update mode: {args.update}")
     logging.info(scaffold)
