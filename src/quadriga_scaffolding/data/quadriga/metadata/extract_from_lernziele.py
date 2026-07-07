@@ -311,7 +311,11 @@ def merge_learning_objectives_into_metadata() -> bool:
             chapter["learning-goal"] = chapter_learning_goals.get(chapter_title, "TODO")
             chapter["learning-objectives"] = new_objectives
 
-        if save_yaml_file(metadata_path, metadata):
+        if save_yaml_file(
+            metadata_path,
+            metadata,
+            schema_comment="# yaml-language-server: $schema=https://quadriga-dk.github.io/quadriga-schema/v1.0.0/schema.json",
+        ):
             logger.info("Successfully merged learning objectives into metadata.yml")
             return True
 
