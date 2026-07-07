@@ -122,8 +122,10 @@ def extract_admonition_blocks(
         section_title = title_match.group(1)
 
         # Learning goal
+        # ((?:(?!-->).)+?) instead of (.+?) so the match can never run past
+        # the end of the comment into an adjacent one
         learning_goal_match = re.search(
-            r"<!--\s*learning-goal:\s*(.+?)\s*-->",
+            r"<!--\s*learning-goal:\s*((?:(?!-->).)+?)\s*-->",
             body,
             re.DOTALL,
         )
@@ -137,9 +139,14 @@ def extract_admonition_blocks(
         body_cleaned = re.sub(r"<!--\s*START:\s*.+?\s*-->\s*", "", body)
         body_cleaned = re.sub(r"\s*<!--\s*END:\s*.+?\s*-->", "", body_cleaned)
 
-        # Parse numbered objectives with optional inline metadata comment
+        # Parse numbered objectives with optional inline metadata comment.
+        # The comment group must not cross a --> boundary, and the lookahead
+        # accepts a following comment so a stray extra comment between
+        # objectives doesn't get swallowed into the objective text.
         objectives = []
-        objective_pattern = r"\d+\.\s+(.+?)(?:(?:\n\s*|(?=<!--))<!--\s*(.+?)\s*-->)?(?=\n\d+\.|\n\n|$)"
+        objective_pattern = (
+            r"\d+\.\s+(.+?)(?:(?:\n\s*|(?=<!--))<!--\s*((?:(?!-->).)+?)\s*-->)?(?=\n\d+\.|\n\s*<!--|\n\n|$)"
+        )
 
         for obj_match in re.finditer(objective_pattern, body_cleaned, re.DOTALL):
             objective_text = normalize_whitespace(obj_match.group(1))
