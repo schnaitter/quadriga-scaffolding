@@ -92,6 +92,38 @@ def iter_toc_files(node: dict | list):
             yield from iter_toc_files(item)
 
 
+def resolve_toc_file(file_str: str, repo_root: Path | None = None) -> Path:
+    """Resolve a _toc.yml 'file' entry to an absolute path.
+
+    _toc.yml entries usually omit the file extension, and the file names may
+    contain dots (e.g. "1_einstieg/1.0_einleitung"), so the extension must be
+    appended — Path.with_suffix would truncate the name at the last dot and
+    turn "1_einstieg/1.0_einleitung" into "1_einstieg/1.md".
+
+    Args:
+        file_str (str): The 'file' value from _toc.yml
+        repo_root (Path, optional): Repository root path. If None, it will be determined
+
+    Returns
+    -------
+        Path: Absolute path to the file. If no existing file is found, the
+              path with ".md" appended is returned so callers can report a
+              sensible missing path.
+    """
+    path = get_file_path(file_str, repo_root)
+
+    # Entry already carries an explicit extension
+    if path.suffix in {".md", ".ipynb"}:
+        return path
+
+    for ext in (".md", ".ipynb"):
+        candidate = path.with_name(path.name + ext)
+        if candidate.exists():
+            return candidate
+
+    return path.with_name(path.name + ".md")
+
+
 # ---- YAML Handling ----
 
 

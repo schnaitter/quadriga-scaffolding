@@ -12,6 +12,7 @@ from .utils import (
     get_repo_root,
     iter_toc_files,
     load_yaml_file,
+    resolve_toc_file,
     save_yaml_file,
 )
 
@@ -220,11 +221,10 @@ def merge_learning_objectives_into_metadata() -> bool:
 
         md_file = None
         for file_str in iter_toc_files(toc_data or {}):
-            p = Path(file_str)
-            if re.search(r"lernziel|learning.?objective|learning.?outcome", p.stem, re.IGNORECASE):
-                if p.suffix not in [".md", ".ipynb"]:
-                    p = p.with_suffix(".md")
-                full_path = get_file_path(p, repo_root)
+            # Match against the file name, not Path.stem — names may contain
+            # dots (e.g. "1.1_lernziele"), which stem would truncate to "1"
+            if re.search(r"lernziel|learning.?objective|learning.?outcome", Path(file_str).name, re.IGNORECASE):
+                full_path = resolve_toc_file(file_str, repo_root)
                 if full_path.exists():
                     md_file = full_path
                     break
