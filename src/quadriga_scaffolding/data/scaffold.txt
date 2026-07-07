@@ -28,6 +28,7 @@ Extract information from _config.yml and lernziele.md and update metadata.yml ac
 + quadriga/metadata/extract_from_lernziele.py
 
 Create metadata files for GitHub, writing software, and Zenodo
+- quadriga/metadata/update_citation_cff.py
 + quadriga/metadata/create_citation_cff.py
 + quadriga/metadata/create_bibtex.py
 + quadriga/metadata/create_zenodo_json.py
